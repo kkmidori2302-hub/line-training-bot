@@ -1,40 +1,50 @@
 const express = require('express');
-const { middleware, Client } = require('@line/bot-sdk');
+const { Client, middleware } = require('@line/bot-sdk');
 const { createClient } = require('@supabase/supabase-js');
 require('dotenv').config();
 
 const app = express();
 
-const lineConfig = {
-  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
-  channelSecret: process.env.LINE_CHANNEL_SECRET,
-};
-const lineClient = new Client(lineConfig);
-
+// Supabase設定
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_ANON_KEY
 );
 
-app.post('/webhook', middleware(lineConfig), async (req, res) => {
-  const events = req.body.events;
-  await Promise.all(events.map(handleEvent));
+// LINEクライアントは起動時ではなくリクエスト時に作成
+function getLineClient() {
+  return new Client({
+    channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
+    channelSecret: process.env.LINE_CHANNEL_SECRET,
+  });
+}
+
+// Webhook受信
+app.post('/webhook', express.json(), async (req, res) => {
   res.status(200).json({ status: 'ok' });
+  const events = req.body.events || [];
+  await Promise.all(events.map(handleEvent));
+});
+
+// 動作確認用
+app.get('/', (req, res) => {
+  res.send('LINE研修ボット稼働中！');
 });
 
 async function handleEvent(event) {
   if (event.type !== 'message' || event.message.type !== 'text') return;
   const userId = event.source.userId;
   const text = event.message.text.trim();
+  const lineClient = getLineClient();
   await registerEmployee(userId);
   if (text === '研修' || text === 'メニュー' || text === 'menu') {
-    return sendMenu(event.replyToken);
+    return sendMenu(lineClient, event.replyToken);
   } else if (text === '進捗') {
-    return sendProgress(event.replyToken, userId);
+    return sendProgress(lineClient, event.replyToken, userId);
   } else if (text === '修了証') {
-    return sendCertificates(event.replyToken, userId);
+    return sendCertificates(lineClient, event.replyToken, userId);
   } else {
-    return sendMenu(event.replyToken);
+    return sendMenu(lineClient, event.replyToken);
   }
 }
 
@@ -52,7 +62,7 @@ async function registerEmployee(lineUserId) {
   }
 }
 
-async function sendMenu(replyToken) {
+async function sendMenu(lineClient, replyToken) {
   await lineClient.replyMessage(replyToken, {
     type: 'template',
     altText: '研修メニュー',
@@ -69,7 +79,7 @@ async function sendMenu(replyToken) {
   });
 }
 
-async function sendProgress(replyToken, lineUserId) {
+async function sendProgress(lineClient, replyToken, lineUserId) {
   const { data: employee } = await supabase
     .from('employees')
     .select('id, name')
@@ -97,7 +107,7 @@ async function sendProgress(replyToken, lineUserId) {
   return lineClient.replyMessage(replyToken, { type: 'text', text: message });
 }
 
-async function sendCertificates(replyToken, lineUserId) {
+async function sendCertificates(lineClient, replyToken, lineUserId) {
   const { data: employee } = await supabase
     .from('employees')
     .select('id, name')
