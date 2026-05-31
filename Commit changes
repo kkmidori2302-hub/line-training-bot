@@ -1,0 +1,4 @@
+LINE_CHANNEL_ACCESS_TOKEN=ここにLINEのアクセストークン
+LINE_CHANNEL_SECRET=ここにLINEのチャネルシークレット
+SUPABASE_URL=ここにSupabaseのURL
+SUPABASE_ANON_KEY=ここにSupabaseのanon key
